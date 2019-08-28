@@ -127,8 +127,11 @@ def create_diagnosis_all_participants(path_bids, subjects_list, output_path, dat
     '''
 
     import os
-    import numpy as np
     import pandas as pd
+
+    def pp_list(list):
+        for elt in list:
+            print(elt)
 
     all_subjects = subjects_list
     # sublist = all_subjects.tolist()
@@ -180,60 +183,48 @@ def create_diagnosis_all_participants(path_bids, subjects_list, output_path, dat
                     for ses in range(len(diagnosis)):
                         if int(session[ses][5:]) <= N_months and diagnosis[ses] == 'AD':
                             has_converted = True
-                        if diagnosis[ses] == 'CN':
-                            if not to_remove:
-                                print (
-                                        sublist[
-                                            sub] + ' is MCI in baseline but moves back to CN in one of its timepoints. '
-                                        + 'Subject discarded')
-                                MCI_CN.append(sublist[sub])
-                            diagnosis_bl = 'Inconsistent'
+                        if diagnosis[ses] == 'CN' and not to_remove:
+                            print (sublist[sub] + ' is MCI in baseline but moves back to CN in one of its timepoints. '
+                                   + 'Subject discarded')
+                            MCI_CN.append(sublist[sub])
+
                     if has_converted:
                         diagnosis_bl = 'pMCI'
                     else:
-                        if max_vis(session) < N_months:
-                            diagnosis_bl = 'uMCI'
-                            if not to_remove:
-                                print(
-                                        sublist[
-                                            sub] + ' is undetermined MCI : not enough timepoint to say if sMCI or pMCI.'
-                                        + 'Subject discarded')
-                                MCI_inconsistent += 1
-                        else:
-                            diagnosis_bl = 'sMCI'
-                    need_MCI_AD_MCI_check = False
-                    for ses in range(len(diagnosis)):
-                        if diagnosis[ses] == 'AD':
-                            need_MCI_AD_MCI_check = True
+                        diagnosis_bl = 'uMCI' if max_vis(session) < N_months else 'sMCI'
+                        if diagnosis_bl == 'uMCI' and not to_remove:
+                            print(sublist[sub] + ' is undetermined MCI : not enough timepoint to say if sMCI or pMCI.'
+                                    + 'Subject discarded')
+                            MCI_inconsistent += 1
+
+                    need_MCI_AD_MCI_check = len([ses for ses in range(len(diagnosis)) if diagnosis[ses] == 'AD']) > 0
+
                     if need_MCI_AD_MCI_check:
-                        last_AD_time = 0
-                        last_MCI_time = 0
-                        for ses in range(len(diagnosis)):
-                            if diagnosis[ses] == 'AD':
-                                if int(session[ses][5:]) > last_AD_time:
-                                    last_AD_time = int(session[ses][5:])
-                            if diagnosis[ses] == 'MCI':
-                                if int(session[ses][5:]) > last_MCI_time:
-                                    last_MCI_time = int(session[ses][5:])
-                        if last_MCI_time > last_AD_time:
-                            if not to_remove:
-                                print(sublist[
-                                          sub] + ' is MCI at baseline, then goes AD, and then back to MCI. Subject discarded')
-                                MCI_AD_MCI.append(sublist[sub])
+                        last_AD_time = max([int(session[ses][5:]) for ses in range(len(diagnosis)) if diagnosis[ses] == 'AD'])
+                        last_MCI_time = max([int(session[ses][5:]) for ses in range(len(diagnosis)) if diagnosis[ses] == 'MCI'])
+
+                        if last_MCI_time > last_AD_time and not to_remove:
+                            print(sublist[sub] + ' is MCI at baseline, then goes AD, and then back to MCI. Subject discarded')
+                            MCI_AD_MCI.append(sublist[sub])
+
                 elif diagnosis_bl == 'CN':
-                    for l in range(len(session)):
-                        if int(session[l][5:]) <= N_months and diagnosis[l] != 'CN' and diagnosis[l] == diagnosis[l]:
-                            if not to_remove:
-                                print(sublist[sub] + ' is CN at baseline and change within the first ' + str(
-                                    N_months) + ' months')
-                                CN_change += 1
+
+                    comment = 'is CN at baseline and change within the first'
+                    cn_change_list = ["{0} {1} {2} months".format(sublist[sub], comment, N_months)
+                                      for l in range(len(session)) if
+                                      (int(session[l][5:]) <= N_months and diagnosis[l] != 'CN'
+                                       and diagnosis[l] == diagnosis[l] and not to_remove)]
+                    pp_list(cn_change_list)
+                    CN_change += len(cn_change_list)
+
                 elif diagnosis_bl == 'AD':
-                    for l in range(len(session)):
-                        if diagnosis[l] != 'AD' and diagnosis[l] == diagnosis[l]:
-                            if not to_remove:
-                                print(sublist[
-                                          sub] + ' is AD at baseline and change within the following months. Subject discarded')
-                                AD_change += 1
+
+                    comment = ' is AD at baseline and change within the following months. Subject discarded'
+                    ad_change_list = [str(sublist[sub]) + comment for l in range(len(session)) if
+                                      (diagnosis[l] != 'AD' and diagnosis[l] == diagnosis[l] and not to_remove)]
+                    pp_list(ad_change_list)
+                    AD_change += len(ad_change_list)
+
                 elif diagnosis_bl != diagnosis_bl:
                     to_remove = True
                     print(sublist[sub] + ' do not have a diagnosis at baseline, subject discarded')
@@ -275,10 +266,8 @@ def obtain_global_list(output_path, database, MCI_CN, MCI_AD_MCI, N_months=36):
 
     '''
 
-    import numpy as np
     import pandas as pd
     import os
-    import re
 
     # the subjects taken into account derived from the list obtained with the previous method
     sub_study = os.path.join(output_path, 'diagnosis_' + str(N_months) + '_' + database + '.tsv')
